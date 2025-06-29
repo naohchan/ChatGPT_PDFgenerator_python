@@ -117,8 +117,8 @@ if __name__ == "__main__":
 #Target Audience: Media Content Creator
 
 #########################################    
-    #target_audience = "Policy Maker"
-    target_audience = "Media Content Creator"
+    target_audience = "Policy Maker"
+    #target_audience = "Media Content Creator"
 #########################################
 
     extracted_text = extract_text_from_pdf(file_path)
