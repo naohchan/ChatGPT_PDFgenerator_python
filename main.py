@@ -22,24 +22,26 @@ def generate_summary_with_gpt(text, target_audience, api_key):
     prompt = f"""
     You are an expert science communicator. Summarise the following research paper content for a {target_audience} audience.
 
-    ⚠️ Return the result **strictly as JSON** with the following format:
+    Return the result **strictly as JSON** with the following fields:
 
     {{
-    "title": "Your generated title here (max 10 words)",
-    "subtitle": "Your generated subtitle here (max 20 words)",
+    "title": "Short and engaging (max 10 words)",
+    "subtitle": "Concise context (max 20 words)",
+    "narrative": "A short paragraph (max 100 words) summarizing the key idea in a more natural, storytelling tone.",
     "bullets": [
-        "First key takeaway",
-        "Second key takeaway",
-        "Third key takeaway"
+        "Key takeaway 1",
+        "Key takeaway 2",
+        "Key takeaway 3"
     ],
     "link": "https://example.com/source-or-infographic"
     }}
 
-    Make sure each part is tailored to what would be relevant and useful for someone in that audience.
+    Only include information that is useful and relevant for someone in {target_audience}.
 
     Text:
     {text[:12000]}
     """
+
 
     client = OpenAI(api_key=api_key)
 
@@ -76,12 +78,29 @@ class PDF(FPDF):
         self.set_font('Arial', 'B', 12)
         self.cell(0, 10, 'AI Summary', ln=True, align='C')
 
-def generate_pdf(title, subtitle, bullets, output_path):
+def generate_pdf(title, subtitle, narrative, bullets, link, output_path):
     pdf = PDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, f"Title: {title}\n\nSubtitle: {subtitle}\n\nKey Points:\n" + "\n".join(f"- {b}" for b in bullets))
+
+    pdf.multi_cell(0, 10, f"Title: {title}")
+    pdf.multi_cell(0, 10, f"Subtitle: {subtitle}\n")
+    
+    pdf.set_font("Arial", 'I', 11)
+    pdf.multi_cell(0, 10, f"{narrative}\n")
+
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, "Key Points:")
+    for b in bullets:
+        pdf.multi_cell(0, 10, f"- {b}")
+
+    pdf.ln(10)
+    pdf.set_text_color(0, 0, 255)
+    pdf.set_font("Arial", 'U', 12)
+    pdf.cell(0, 10, f"Source / Infographic: {link}", ln=True, link=link)
+
     pdf.output(output_path)
+
 
 # === RUNNING THE WHOLE FLOW ===
 if __name__ == "__main__":
@@ -98,8 +117,8 @@ if __name__ == "__main__":
 #Target Audience: Media Content Creator
 
 #########################################    
-    target_audience = "Policy Maker"
-    #target_audience = "Media Content Creator"
+    #target_audience = "Policy Maker"
+    target_audience = "Media Content Creator"
 #########################################
 
     extracted_text = extract_text_from_pdf(file_path)
@@ -108,8 +127,13 @@ if __name__ == "__main__":
     subtitle = gpt_output["subtitle"]
     bullets = gpt_output["bullets"]
     link = gpt_output["link"]
+    narrative = gpt_output["narrative"]
+
+
+
 
     output_pdf = f"summary_for_{target_audience.replace(' ', '_')}.pdf"
-    generate_pdf(title, subtitle, bullets, output_pdf)
+    #generate_pdf(title, subtitle, bullets, output_pdf)
+    generate_pdf(title, subtitle, narrative, bullets, link, output_pdf)
 
     print(f"✅ Summary PDF generated: {output_pdf}")
