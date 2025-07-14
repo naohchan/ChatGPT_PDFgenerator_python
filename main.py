@@ -64,6 +64,53 @@ def generate_summary_with_gpt(text, target_audience, api_key):
         print(raw_output)
         return None
 
+# 2. Generate press release from GPT
+def generate_press_release_with_gpt(text, target_audience, api_key):
+    prompt = f"""
+You are a skilled communications professional. Write a press release about the following research paper, tailored for a {target_audience} audience.
+
+Return the result **strictly as JSON**, with these fields:
+
+{{
+  "headline": "Short and impactful title",
+  "subheadline": "Optional, one line of additional context",
+  "dateline": "City, Country — Date",
+  "lead_paragraph": "Concise opening paragraph with key info",
+  "body_paragraphs": [
+    "Body paragraph 1",
+    "Body paragraph 2"
+  ],
+  "quote": "Optional quote from a project leader or expert",
+  "boilerplate": "About the organization",
+  "contact_info": "Name — Email — Phone"
+}}
+
+Focus on clarity and journalistic tone.  
+Use the following text as the source material:
+{text[:12000]}
+"""
+
+    client = OpenAI(api_key=api_key)
+
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.5,
+        max_tokens=1000
+    )
+
+    raw_output = response.choices[0].message.content
+
+    try:
+        press_release = json.loads(raw_output)
+        return press_release
+    except json.JSONDecodeError:
+        print("❌ Failed to parse press release JSON. Raw output:")
+        print(raw_output)
+        return None
+
 # 3. Parse GPT output into title, subtitle, bullets
 def parse_output(output_text):
     lines = output_text.strip().split("\n")
@@ -102,6 +149,72 @@ def generate_pdf(title, subtitle, narrative, bullets, link, output_path):
     pdf.output(output_path)
 
 
+
+
+def generate_press_release_pdf(headline, subheadline, dateline, lead_paragraph, body_paragraphs, quote, boilerplate, contact_info, output_path):
+    pdf = PDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Header
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, 'FOR IMMEDIATE RELEASE', ln=True, align='C')
+    pdf.ln(5)
+
+    # Headline
+    pdf.set_font("Arial", 'B', 16)
+    pdf.multi_cell(0, 10, headline)
+
+    # Subheadline
+    if subheadline:
+        pdf.set_font("Arial", 'I', 12)
+        pdf.multi_cell(0, 10, subheadline)
+    pdf.ln(5)
+
+    # Dateline
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 10, dateline)
+    pdf.ln(5)
+
+    # Lead Paragraph
+    pdf.multi_cell(0, 10, lead_paragraph)
+    pdf.ln(5)
+
+    # Body
+    for para in body_paragraphs:
+        pdf.multi_cell(0, 10, para)
+        pdf.ln(2)
+
+    # Quote
+    if quote:
+        pdf.set_font("Arial", 'I', 12)
+        pdf.multi_cell(0, 10, f'"{quote}"')
+        pdf.ln(5)
+
+    # Boilerplate
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 10, boilerplate)
+    pdf.ln(5)
+
+    # Contact Info
+    pdf.set_font("Arial", 'B', 12)
+    pdf.multi_cell(0, 10, f'Contact: {contact_info}')
+
+    pdf.output(output_path)
+    print(f"✅ Press Release PDF generated: {output_path}")
+
+
+
+
+
+
+
+
+
+
+
+
+
 # === RUNNING THE WHOLE FLOW ===
 if __name__ == "__main__":
     file_path = "SEED2GROW_example.pdf"  # Replace with your PDF
@@ -137,3 +250,20 @@ if __name__ == "__main__":
     generate_pdf(title, subtitle, narrative, bullets, link, output_pdf)
 
     print(f"✅ Summary PDF generated: {output_pdf}")
+
+    press_release = generate_press_release_with_gpt(extracted_text, target_audience, api_key)
+
+    if press_release:
+        output_press_pdf = f"press_release_for_{target_audience.replace(' ', '_')}.pdf"
+
+        generate_press_release_pdf(
+            press_release["headline"],
+            press_release["subheadline"],
+            press_release["dateline"],
+            press_release["lead_paragraph"],
+            press_release["body_paragraphs"],
+            press_release["quote"],
+            press_release["boilerplate"],
+            press_release["contact_info"],
+            output_press_pdf
+        )
