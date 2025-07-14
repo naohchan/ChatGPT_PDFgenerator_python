@@ -18,11 +18,11 @@ def extract_text_from_pdf(file_path):
     return " ".join([page.get_text() for page in doc])
 
 # 2. Generate summary from GPT
-def generate_summary_with_gpt(text, target_audience, api_key):
+def generate_summary_with_gpt(text, target_audience, api_key, retries=3):
     prompt = f"""
-    You are an expert science communicator. Summarise the following research paper content for a {target_audience} audience.
+    You are an expert science communicator. Write two **different summaries** of the following research paper content, tailored for a {target_audience} audience.
 
-    Return the result **strictly as JSON** with the following fields:
+    Both versions must follow **strictly the JSON format**, with these fields:
 
     {{
     "title": "Short and engaging (max 10 words)",
@@ -36,36 +36,45 @@ def generate_summary_with_gpt(text, target_audience, api_key):
     "link": "https://example.com/source-or-infographic"
     }}
 
-    Only include information that is useful and relevant for someone in {target_audience}.
+    🎯 Version A: Write it with a **professional, formal, ethical and neutral tone** appropriate for {target_audience}.
+    🎨 Version B: Write it with a more **imaginative, warm, engaging and creative tone**, while still appropriate and respectful for {target_audience}.
 
-    Text:
+    Return the two versions in a single JSON object with two keys: `"option_a"` and `"option_b"`.  
+    Do not include any text outside of the JSON.
+    All fields must be included in both versions; if a field has no content, set it as an empty string.
+
+    Use the following text as the source material:
     {text[:12000]}
+
+    Focus on clarity, journalistic style, and adherence to the structure above.
     """
 
     client = OpenAI(api_key=api_key)
 
-    response = client.chat.completions.create(
+    for attempt in range(1, retries + 1):
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "user", "content": prompt}
             ],
             temperature=0.5,
             max_tokens=800
-    )
+        )
 
-    raw_output = response.choices[0].message.content
+        raw_output = response.choices[0].message.content
 
-    try:
-        summary = json.loads(raw_output)
-        return summary
-    except json.JSONDecodeError:
-        print("❌ Failed to parse JSON. Raw output:")
-        print(raw_output)
-        return None
-
-
-
-
+        try:
+            json_start = raw_output.find('{')
+            json_end = raw_output.rfind('}') + 1
+            json_str = raw_output[json_start:json_end]
+            summary = json.loads(json_str)
+            return summary
+        except json.JSONDecodeError:
+            print(f"⚠️ Attempt {attempt}: Failed to parse JSON. Retrying…")
+            print("Raw output:")
+            print(raw_output)
+    print("❌ Failed to parse summary JSON after multiple attempts.")
+    return None
 
 
 # 3. Parse GPT output into title, subtitle, bullets
@@ -125,15 +134,17 @@ if __name__ == "__main__":
 #########################################
 
     extracted_text = extract_text_from_pdf(file_path)
-    gpt_output = generate_summary_with_gpt(extracted_text, target_audience,api_key)
-    title = gpt_output["title"]
-    subtitle = gpt_output["subtitle"]
-    bullets = gpt_output["bullets"]
-    link = gpt_output["link"]
-    narrative = gpt_output["narrative"]
+    
+    gpt_output = generate_summary_with_gpt(extracted_text, target_audience, api_key)
 
-    output_pdf = f"summary_for_{target_audience.replace(' ', '_')}.pdf"
-    #generate_pdf(title, subtitle, bullets, output_pdf)
-    generate_pdf(title, subtitle, narrative, bullets, link, output_pdf)
+    if gpt_output:
+        for option, data in gpt_output.items():
+            title = data["title"]
+            subtitle = data["subtitle"]
+            narrative = data["narrative"]
+            bullets = data["bullets"]
+            link = data["link"]
 
-    print(f"✅ Summary PDF generated: {output_pdf}")
+            output_pdf = f"summary_for_{target_audience.replace(' ', '_')}_{option.upper()}.pdf"
+            generate_pdf(title, subtitle, narrative, bullets, link, output_pdf)
+            print(f"✅ Summary PDF generated: {output_pdf}")
